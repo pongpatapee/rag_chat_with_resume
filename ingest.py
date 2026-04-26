@@ -97,15 +97,24 @@ def ingest_file(filepath, conn):
     #     print(chunk)
     #     print()
 
-    embeddings = embed(chunks)
+    embeddings = []
+    for chunk in chunks:
+        embeddings += embed(chunk)
+
+    print(len(chunks), len(embeddings))
 
     if not embeddings:
         print("No embeddings")
         return
 
     with conn.cursor() as cur:
+        print(f"importing chunks for {filepath}")
+        i = 0
         for chunk, embedding in zip(chunks, embeddings):
-            print(chunk, len(embeddings))
+            print(f"chunk {i}")
+            print(chunk)
+            print("\n\n")
+            i += 1
             cur.execute(
                 "INSERT INTO documents (content, source, embedding) VALUES (%s, %s, %s)",
                 (chunk, filepath, embedding.values),
