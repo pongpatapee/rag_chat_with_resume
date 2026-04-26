@@ -13,7 +13,7 @@ ai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 EMBEDDING_MODEL = "gemini-embedding-2"
 LLM_MODEL = "gemini-2.5-flash"
 EMBEDDING_DIM = 768
-SIMILARITY_THRESHOLD = 0.2
+SIMILARITY_THRESHOLD = 0.4
 TOP_K = 5
 
 
@@ -70,9 +70,8 @@ def answer(question, conn):
         return
 
     print(f"\nRetrieved {len(chunks)} chunks:")
-    for content, source, similarity in chunks:
-        # print(f" {source} (similarity: {similarity:.2f})")
-        print(f"content: {content}")
+    for _, source, similarity in chunks:
+        print(f" {source} (similarity: {similarity:.2f})")
 
     prompt = build_prompt(question, chunks)
 
