@@ -10,8 +10,8 @@ load_dotenv()
 
 ai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-CHUNK_SIZE = 400
-CHUNK_OVERLAP = 50
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 200
 EMBEDDING_MODEL = "gemini-embedding-2"
 EMBEDDING_DIM = 768
 
@@ -46,9 +46,7 @@ def embed(texts):
     result = ai_client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=texts,
-        config=types.EmbedContentConfig(
-            output_dimensionality=EMBEDDING_DIM, task_type="retrieval_document"
-        ),
+        config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
     )
 
     return result.embeddings
@@ -67,7 +65,13 @@ def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
 
 def extract_pdf_file(filepath):
     reader = PdfReader(filepath)
-    return "\n".join(page.extract_text() for page in reader.pages)
+    content = []
+    for page in reader.pages:
+        content.append(page.extract_text())
+
+    # print("content from extract pdf")
+    # print(content)
+    return "\n".join(content)
 
 
 def extract_text_file(filepath):
@@ -88,6 +92,11 @@ def ingest_file(filepath, conn):
     text = extract_text(filepath)
     chunks = chunk_text(text)
 
+    # for idx, chunk in enumerate(chunks):
+    #     print(idx)
+    #     print(chunk)
+    #     print()
+
     embeddings = embed(chunks)
 
     if not embeddings:
@@ -96,7 +105,7 @@ def ingest_file(filepath, conn):
 
     with conn.cursor() as cur:
         for chunk, embedding in zip(chunks, embeddings):
-            print(chunk, embedding)
+            print(chunk, len(embeddings))
             cur.execute(
                 "INSERT INTO documents (content, source, embedding) VALUES (%s, %s, %s)",
                 (chunk, filepath, embedding.values),
