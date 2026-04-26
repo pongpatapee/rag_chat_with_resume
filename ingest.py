@@ -46,7 +46,9 @@ def embed(texts):
     result = ai_client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=texts,
-        config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
+        config=types.EmbedContentConfig(
+            output_dimensionality=EMBEDDING_DIM, task_type="retrieval_document"
+        ),
     )
 
     return result.embeddings
