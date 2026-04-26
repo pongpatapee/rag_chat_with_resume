@@ -10,10 +10,10 @@ load_dotenv()
 
 ai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 200
-EMBEDDING_MODEL = "gemini-embedding-2"
-EMBEDDING_DIM = 768
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1000))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200))
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-2")
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 768))
 
 
 def get_conn():

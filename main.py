@@ -10,11 +10,11 @@ load_dotenv()
 
 ai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-EMBEDDING_MODEL = "gemini-embedding-2"
-LLM_MODEL = "gemini-2.5-flash"
-EMBEDDING_DIM = 768
-SIMILARITY_THRESHOLD = 0.4
-TOP_K = 5
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-2")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 768))
+SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.4))
+TOP_K = int(os.getenv("TOP_K", 5))
 
 
 def get_conn():
