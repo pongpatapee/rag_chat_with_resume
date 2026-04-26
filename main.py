@@ -10,12 +10,10 @@ load_dotenv()
 
 ai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-CHUNK_SIZE = 400
-CHUNK_OVERLAP = 50
 EMBEDDING_MODEL = "gemini-embedding-2"
 LLM_MODEL = "gemini-2.5-flash"
 EMBEDDING_DIM = 768
-SIMILARITY_THRESHOLD = 0.4
+SIMILARITY_THRESHOLD = 0.2
 TOP_K = 5
 
 
@@ -29,9 +27,7 @@ def retrieve(question, conn):
     result = ai_client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=question,
-        config=types.EmbedContentConfig(
-            task_type="retrieval_query", output_dimensionality=EMBEDDING_DIM
-        ),
+        config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
     )
 
     query_embedding = result.embeddings[0].values
@@ -55,8 +51,9 @@ def build_prompt(question, chunks):
         f"[Source: {source}]\n{content}" for content, source, _ in chunks
     )
 
-    return f"""You are a helpful assistant. Answer the question using ONLY the provided documents.
-If the answer isn't in the documents, say "I dont' have that information" 
+    return f"""You are a helpful assistant. Answer the question using the provided documents.
+You may calculate, infer, and reason from the information given (e.g. computing years from dates).
+If the answer truly isn't derivable from the documents, say "I don't have that information."
 
 Documents:
 {context}
@@ -73,8 +70,9 @@ def answer(question, conn):
         return
 
     print(f"\nRetrieved {len(chunks)} chunks:")
-    for _, source, similarity in chunks:
-        print(f" {source} (similarity: {similarity:.2f})")
+    for content, source, similarity in chunks:
+        # print(f" {source} (similarity: {similarity:.2f})")
+        print(f"content: {content}")
 
     prompt = build_prompt(question, chunks)
 
