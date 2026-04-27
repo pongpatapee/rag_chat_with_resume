@@ -1,57 +1,41 @@
-import os, glob
+import os
 from dotenv import load_dotenv
-import psycopg2
-from pgvector.psycopg2 import register_vector
-from google import genai
-from google.genai import types
-from pypdf import PdfReader
+from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_postgres import PGVector
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 
 load_dotenv()
 
-ai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
-
+COLLECTION_NAME = "rag_docs"
+CONNECTION_STRING = os.getenv("DATABASE_URL")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-2")
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 768))
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.4))
 TOP_K = int(os.getenv("TOP_K", 5))
 
+embeddings = GoogleGenerativeAIEmbeddings(
+    model=EMBEDDING_MODEL,
+    api_key=os.getenv("GOOGLE_API_KEY"),
+)
 
-def get_conn():
-    conn = psycopg2.connect(os.getenv("DATABASE_URL"))
-    register_vector(conn)
-    return conn
+vectorstore = PGVector(
+    embeddings=embeddings,
+    collection_name=COLLECTION_NAME,
+    connection=CONNECTION_STRING,
+)
 
+# This is your retrieve() function, but now a reusable object
+retriever = vectorstore.as_retriever(
+    search_type="similarity_score_threshold",
+    search_kwargs={"k": TOP_K, "score_threshold": SIMILARITY_THRESHOLD},
+)
 
-def retrieve(question, conn):
-    result = ai_client.models.embed_content(
-        model=EMBEDDING_MODEL,
-        contents=question,
-        config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
-    )
-
-    query_embedding = result.embeddings[0].values
-
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT content, source, 1 - (embedding <=> %s::vector) AS similarity
-            FROM documents
-            WHERE 1 - (embedding <=> %s::vector) > %s
-            ORDER BY similarity DESC
-            LIMIT %s
-        """,
-            (query_embedding, query_embedding, SIMILARITY_THRESHOLD, TOP_K),
-        )
-        return cur.fetchall()
-
-
-def build_prompt(question, chunks):
-    context = "\n\n---\n\n".join(
-        f"[Source: {source}]\n{content}" for content, source, _ in chunks
-    )
-
-    return f"""You are a helpful assistant. Answer the question using the provided documents.
+# This is your build_prompt() function
+prompt = ChatPromptTemplate.from_template(
+    """You are a helpful assistant. Answer the question using the provided documents.
 You may calculate, infer, and reason from the information given (e.g. computing years from dates).
 If the answer truly isn't derivable from the documents, say "I don't have that information."
 
@@ -59,44 +43,45 @@ Documents:
 {context}
 
 Question: {question}
-Answer:"""
+Answer:
+"""
+)
+
+llm = ChatGoogleGenerativeAI(
+    model=LLM_MODEL,
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    temperature=0.2,
+)
 
 
-def answer(question, conn):
-    chunks = retrieve(question, conn)
+def format_docs(docs):
+    return "\n\n---\n\n".join(
+        f"[Source: {doc.metadata.get('source', 'unknown')}]\n{doc.page_content}"
+        for doc in docs
+    )
 
-    if not chunks:
-        print("No relevant documents found above similarity threshold")
-        return
 
-    print(f"\nRetrieved {len(chunks)} chunks:")
-    for _, source, similarity in chunks:
-        print(f" {source} (similarity: {similarity:.2f})")
-
-    prompt = build_prompt(question, chunks)
-
-    response = ai_client.models.generate_content(model=LLM_MODEL, contents=prompt)
-
-    print(f"\nAnswer: \n{response.text}")
+# This is the full pipeline — the entire query.py from before, in 4 lines
+# Read it left to right: retrieve → format → prompt → llm → parse output
+chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+    | StrOutputParser()
+)
 
 
 def main():
-    conn = get_conn()
-    print("RAG demo: Chat with my resume")
-    print("Type quit or exit to terminate the program")
+    print("RAG Demo (LangChain) — Chat with your docs")
+    print("Type 'quit' to exit\n")
 
     while True:
         question = input("You: ").strip()
-
         if question.lower() in ("quit", "exit"):
             break
-
         if question:
-            answer(question, conn)
-
-        print()
-
-    conn.close()
+            answer = chain.invoke(question)
+            print(f"\nAnswer:\n{answer}\n")
 
 
 if __name__ == "__main__":
